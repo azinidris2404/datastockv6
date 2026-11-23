@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DataStock - Manajemen Stok & Cek Zona Cepat</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SheetJS (XLSX) untuk baca & export Excel super cepat di client-side -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- Html5-QRCode untuk Live Barcode Scanner real-time -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            red: '#D71920',
+                            darkred: '#A61016',
+                            yellow: '#FFC72C',
+                            blue: '#0055A5',
+                            darkblue: '#00356B',
+                        }
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 30px -10px rgba(15, 23, 42, 0.08)',
+                        'glow-red': '0 8px 20px -6px rgba(215, 25, 32, 0.45)',
+                        'glow-blue': '0 8px 20px -6px rgba(0, 85, 165, 0.45)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            background: radial-gradient(circle at top right, #EEF2FF 0%, #F4F6F9 45%, #F8FAFC 100%);
+            color: #1E293B;
+            overflow-x: hidden;
+            font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+        }
+        .tabular-nums {
+            font-variant-numeric: tabular-nums;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #F1F5F9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #CBD5E1;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94A3B8;
+        }
+        .nav-btn.active {
+            background-color: #FFC72C;
+            color: #0F172A;
+            box-shadow: 0 4px 14px rgba(255, 199, 44, 0.45);
+            transform: translateY(-1px);
+        }
+        .filter-pill.active {
+            background-color: #0055A5;
+            color: #FFFFFF;
+            border-color: #0055A5;
+            box-shadow: 0 4px 10px -2px rgba(0, 85, 165, 0.35);
+        }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        .fade-in {
+            animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .table-container {
+            flex: 1 1 0%;
+            min-height: 260px;
+        }
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        /* Styling video live scanner */
+        #liveScannerReader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            border-radius: 0.75rem;
+        }
+        #liveScannerReader {
+            border: none !important;
+        }
+    </style>
+</head>
+<body class="min-h-[100dvh] flex flex-col">
+
+    <!-- HEADER & NAVIGASI UTAMA (Ringkas & Simpel) -->
+    <header class="bg-brand-red text-white shadow-md sticky top-0 z-40">
+        <div class="h-1 w-full flex">
+            <div class="w-1/2 bg-brand-yellow"></div>
+            <div class="w-1/2 bg-brand-blue"></div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-3 sm:px-5 py-1.5 sm:py-2">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-1.5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-brand-yellow text-brand-red flex items-center justify-center font-black text-sm shadow-sm">
+                            DS
+                        </div>
+                        <h1 class="text-base sm:text-lg font-black tracking-tight leading-none flex items-center gap-1">
+                            DATA<span class="text-brand-yellow">STOCK</span>
+                        </h1>
+                    </div>
+
+                    <div id="masterStatusBadgeMobile" class="md:hidden text-[11px] bg-black/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-brand-yellow"></span>
+                        <span id="masterCountMobile" class="font-bold">0 Item</span>
+                    </div>
+                </div>
+
+                <!-- Navigasi 3 Halaman -->
+                <nav class="grid grid-cols-3 gap-1 bg-black/20 p-1 rounded-xl">
+                    <button onclick="switchPage(1)" id="tab-1" class="nav-btn active flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all text-white hover:bg-white/10">
+                        <i data-lucide="database" class="w-3.5 h-3.5"></i>
+                        <span>1. Master</span>
+                    </button>
+                    <button onclick="switchPage(2)" id="tab-2" class="nav-btn flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all text-white hover:bg-white/10">
+                        <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i>
+                        <span>2. SO</span>
+                    </button>
+                    <button onclick="switchPage(3)" id="tab-3" class="nav-btn flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all text-white hover:bg-white/10">
+                        <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+                        <span>3. Lokasi</span>
+                    </button>
+                </nav>
+
+                <div class="hidden md:flex items-center gap-1.5 bg-black/20 px-3 py-1 rounded-xl text-xs">
+                    <span class="w-2 h-2 rounded-full bg-brand-yellow"></span>
+                    <span id="masterCountDesktop" class="font-bold text-white">0 Produk Aktif</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- KONTEN UTAMA -->
+    <main class="flex-1 flex flex-col max-w-7xl w-full mx-auto px-3 sm:px-6 py-2.5 sm:py-4">
+
+        <!-- HALAMAN 1: DATA MASTER -->
+        <section id="page-1" class="fade-in space-y-5">
+            <div class="bg-white rounded-3xl shadow-soft border border-slate-200/80 overflow-hidden">
+                <div class="bg-gradient-to-r from-brand-blue via-brand-blue to-brand-darkblue px-6 py-5 text-white flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-lg sm:text-xl font-extrabold flex items-center gap-2.5">
+                            <span class="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+                                <i data-lucide="file-spreadsheet" class="w-5 h-5 text-brand-yellow"></i>
+                            </span>
+                            Upload & Pembaruan Data Master
+                        </h2>
+                        <p class="text-xs text-blue-100 mt-1">Mendukung file Excel besar (.xlsx, .xls, .csv) dengan susunan kolom acak atau berlebih.</p>
+                    </div>
+                    <span class="bg-brand-yellow text-slate-900 text-xs font-black px-3.5 py-1.5 rounded-full shadow-sm flex items-center gap-1.5">
+                        <i data-lucide="zap" class="w-3.5 h-3.5 text-brand-red"></i>
+                        Engine Turbo Lokal
+                    </span>
+                </div>
+
+                <div class="p-4 sm:p-5 space-y-4">
+                    <div id="dropZone" class="group border-2 border-dashed border-slate-300 hover:border-brand-red rounded-2xl p-4 sm:p-5 transition-all bg-gradient-to-r from-slate-50 to-white hover:from-red-50/40 hover:to-white cursor-pointer relative flex flex-col sm:flex-row items-center justify-between gap-3">
+                        <input type="file" id="excelFileInput" accept=".xlsx, .xls, .csv" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onchange="handleFileUpload(event)">
+                        
+                        <div class="flex items-center gap-3 text-left">
+                            <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-red-100 to-red-50 text-brand-red flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                                <i data-lucide="upload-cloud" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-extrabold text-slate-800">Upload File Excel Master</h3>
+                                <p class="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                                    Tarik atau klik untuk memilih file <span class="font-semibold text-slate-700">.xlsx, .xls, .csv</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="inline-flex items-center gap-1.5 bg-brand-red group-hover:bg-brand-darkred text-white text-xs font-extrabold px-4 py-2.5 rounded-xl shadow-glow-red transition shrink-0">
+                            <i data-lucide="folder-open" class="w-4 h-4 text-brand-yellow"></i>
+                            <span>Pilih File</span>
+                        </div>
+                    </div>
+
+                    <div id="uploadProgressBox" class="hidden bg-blue-50/90 border border-blue-200 rounded-2xl p-4 space-y-2.5">
+                        <div class="flex justify-between items-center text-xs font-bold text-brand-blue">
+                            <span id="uploadStatusText">Membaca struktur file Excel...</span>
+                            <span id="uploadPercentText" class="tabular-nums">0%</span>
+                        </div>
+                        <div class="w-full bg-blue-200/70 rounded-full h-2.5 overflow-hidden">
+                            <div id="uploadProgressBar" class="bg-gradient-to-r from-brand-blue to-blue-500 h-2.5 rounded-full transition-all duration-150" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div class="bg-white border border-slate-200/90 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
+                            <div class="w-12 h-12 rounded-2xl bg-blue-50 text-brand-blue flex items-center justify-center shrink-0">
+                                <i data-lucide="layers" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs text-slate-500 font-semibold">Total Data Tersimpan</p>
+                                <p id="statMasterTotal" class="text-xl font-black text-slate-800 tabular-nums mt-0.5">0 Item</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white border border-slate-200/90 rounded-2xl p-4 flex items-center gap-4 shadow-sm">
+                            <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                                <i data-lucide="clock" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <p class="text-xs text-slate-500 font-semibold">Pembaruan Terakhir</p>
+                                <p id="statMasterUpdated" class="text-sm font-extrabold text-slate-800 mt-0.5">Belum ada data</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white border border-slate-200/90 rounded-2xl p-4 flex items-center justify-between gap-2 shadow-sm">
+                            <div>
+                                <p class="text-xs text-slate-500 font-semibold">Aksi Database</p>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Update OH / Simulasi / Hapus</p>
+                            </div>
+                            <div class="flex flex-wrap justify-end gap-1.5">
+                                <button onclick="openUpdateOhModal()" class="px-3 py-2 bg-brand-blue hover:bg-brand-darkblue text-white text-xs font-extrabold rounded-xl transition shadow-sm flex items-center gap-1">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-brand-yellow"></i>
+                                    <span>Update OH</span>
+                                </button>
+                                <button onclick="loadSampleMasterData()" class="px-3 py-2 bg-brand-yellow hover:bg-amber-400 text-slate-900 text-xs font-extrabold rounded-xl transition shadow-sm">
+                                    Data Contoh
+                                </button>
+                                <button onclick="confirmClearMaster()" class="px-3 py-2 bg-red-50 hover:bg-red-100 text-brand-red text-xs font-extrabold rounded-xl transition border border-red-200">
+                                    Hapus
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- HALAMAN 2: TABEL STOK OPNAME & INPUT FISIK -->
+        <section id="page-2" class="hidden fade-in flex-1 flex flex-col space-y-2.5 min-h-[calc(100dvh-105px)]">
+            <!-- Kartu Ringkasan KPI (Diperkecil & Ringkas) -->
+            <div class="grid grid-cols-3 gap-2 shrink-0">
+                <div class="bg-white rounded-xl px-2.5 py-2 border border-slate-200/80 border-l-4 border-l-brand-blue shadow-sm flex items-center justify-between gap-1">
+                    <div class="min-w-0">
+                        <p class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">Total Item</p>
+                        <div class="flex flex-wrap items-baseline gap-1 mt-0.5">
+                            <p id="summaryTotalItem" class="text-sm sm:text-lg font-black text-slate-800 tabular-nums leading-none">0</p>
+                            <span id="summaryProgressText" class="text-[9px] sm:text-[10px] font-bold text-brand-blue bg-blue-50 px-1.5 py-0.5 rounded-full leading-none">0%</span>
+                        </div>
+                    </div>
+                    <div class="hidden sm:flex w-8 h-8 rounded-lg bg-blue-50 text-brand-blue items-center justify-center shrink-0">
+                        <i data-lucide="package" class="w-4 h-4"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl px-2.5 py-2 border border-slate-200/80 border-l-4 border-l-brand-yellow shadow-sm flex items-center justify-between gap-1">
+                    <div class="min-w-0">
+                        <p class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">Selisih Qty</p>
+                        <p id="summarySelisihItem" class="text-sm sm:text-lg font-black text-slate-800 tabular-nums mt-0.5 leading-none">0</p>
+                    </div>
+                    <div class="hidden sm:flex w-8 h-8 rounded-lg bg-amber-50 text-amber-600 items-center justify-center shrink-0">
+                        <i data-lucide="diff" class="w-4 h-4"></i>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl px-2.5 py-2 border border-slate-200/80 border-l-4 border-l-brand-red shadow-sm flex items-center justify-between gap-1">
+                    <div class="min-w-0">
+                        <p class="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">Selisih Rp</p>
+                        <p id="summarySelisihRp" class="text-sm sm:text-lg font-black text-brand-red tabular-nums mt-0.5 leading-none truncate">Rp 0</p>
+                    </div>
+                    <div class="hidden sm:flex w-8 h-8 rounded-lg bg-red-50 text-brand-red items-center justify-center shrink-0">
+                        <i data-lucide="banknote" class="w-4 h-4"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel Kontrol & Filter Cepat (Diperkecil) -->
+            <div class="bg-white rounded-xl p-2.5 shadow-sm border border-slate-200/80 space-y-2 shrink-0">
+                <div class="flex flex-wrap items-center justify-between gap-1.5">
+                    <div class="flex flex-wrap gap-1.5">
+                        <button onclick="openBulkPluModal()" class="px-2.5 py-1.5 bg-brand-red hover:bg-brand-darkred text-white rounded-lg font-extrabold text-[11px] sm:text-xs flex items-center gap-1 shadow-sm transition">
+                            <i data-lucide="list-plus" class="w-3.5 h-3.5 text-brand-yellow"></i>
+                            <span>Tambah PLU</span>
+                        </button>
+                        <button onclick="openUpdateOhModal()" class="px-2.5 py-1.5 bg-brand-blue hover:bg-brand-darkblue text-white rounded-lg font-extrabold text-[11px] sm:text-xs flex items-center gap-1 shadow-sm transition">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-brand-yellow"></i>
+                            <span>Update OH</span>
+                        </button>
+                        <button onclick="exportOpnameToExcel()" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-extrabold text-[11px] sm:text-xs flex items-center gap-1 shadow-sm transition">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                            <span>Export</span>
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button onclick="confirmResetFisik()" class="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg font-bold text-[11px] flex items-center gap-1 transition">
+                            <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                            <span>Reset Fisik</span>
+                        </button>
+                        <button onclick="confirmResetAllOpname()" class="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-brand-red border border-red-200 rounded-lg font-bold text-[11px] flex items-center gap-1 transition">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                            <span>Reset Data</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filter Status Pill & Pencarian dalam Baris Ringkas -->
+                <div class="flex flex-col sm:flex-row gap-1.5 sm:items-center">
+                    <div class="flex items-center gap-1 overflow-x-auto pb-0.5 sm:pb-0 shrink-0">
+                        <button onclick="setOpnameFilter('all')" id="filter-all" class="filter-pill active px-2.5 py-1 rounded-full text-[11px] font-bold border border-slate-200 bg-slate-50 text-slate-600 transition shrink-0">
+                            Semua
+                        </button>
+                        <button onclick="setOpnameFilter('uncounted')" id="filter-uncounted" class="filter-pill px-2.5 py-1 rounded-full text-[11px] font-bold border border-slate-200 bg-slate-50 text-slate-600 transition shrink-0">
+                            Belum
+                        </button>
+                        <button onclick="setOpnameFilter('counted')" id="filter-counted" class="filter-pill px-2.5 py-1 rounded-full text-[11px] font-bold border border-slate-200 bg-slate-50 text-slate-600 transition shrink-0">
+                            Sudah
+                        </button>
+                        <button onclick="setOpnameFilter('diff')" id="filter-diff" class="filter-pill px-2.5 py-1 rounded-full text-[11px] font-bold border border-slate-200 bg-slate-50 text-slate-600 transition shrink-0">
+                            Selisih
+                        </button>
+                    </div>
+
+                    <div class="flex gap-1.5 flex-1">
+                        <div class="relative flex-1">
+                            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+                            <input type="text" id="searchOpnameInput" oninput="renderOpnameTable()" onkeydown="handleOpnameSearchKey(event)" placeholder="Cari PLU, Barcode, Nama..." class="w-full pl-8 pr-7 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium focus:outline-none focus:border-brand-blue focus:bg-white transition">
+                            <button onclick="clearOpnameSearch()" id="clearSearchBtn" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                        <button onclick="openLiveScanner('opname')" class="px-2.5 py-1.5 bg-brand-blue hover:bg-brand-darkblue text-white rounded-lg font-extrabold text-[11px] flex items-center gap-1 shadow-sm transition shrink-0">
+                            <i data-lucide="scan-barcode" class="w-3.5 h-3.5 text-brand-yellow"></i>
+                            <span>Scan</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabel Stok Opname (Diperbesar & Penuh Sampai Bawah) -->
+            <div class="flex-1 flex flex-col bg-white rounded-2xl shadow-soft border border-slate-200/80 overflow-hidden">
+                <div class="overflow-x-auto overflow-y-auto table-container">
+                    <table class="w-full text-left border-collapse text-[11px] sm:text-xs whitespace-nowrap">
+                        <thead>
+                            <tr class="bg-gradient-to-r from-brand-blue to-brand-darkblue text-white font-bold text-[10px] sm:text-[11px] uppercase tracking-wider">
+                                <th class="py-2.5 px-2.5">PLU</th>
+                                <th class="py-2.5 px-2.5 min-w-[180px]">DESCP</th>
+                                <th class="py-2.5 px-2.5">BARCODE</th>
+                                <th class="py-2.5 px-2 text-center">C2</th>
+                                <th class="py-2.5 px-2 text-center">LOKASI PTL</th>
+                                <th class="py-2.5 px-2.5 text-right">HPP</th>
+                                <th class="py-2.5 px-2.5 text-right">OH REAL</th>
+                                <th class="py-2.5 px-2 text-center bg-brand-red text-white w-20">FISIK</th>
+                                <th class="py-2.5 px-2.5 text-right">SELISIH</th>
+                                <th class="py-2.5 px-2.5 text-right">RP SELISIH</th>
+                                <th class="py-2.5 px-1.5 text-center w-8">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="opnameTableBody" class="divide-y divide-slate-200 bg-white tabular-nums text-[11px] sm:text-xs">
+                            <tr>
+                                <td colspan="11" class="py-12 text-center text-slate-400">
+                                    Belum ada item di daftar stok. Klik <strong class="text-brand-red">"Tambah PLU"</strong> untuk memasukkan daftar PLU.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- HALAMAN 3: CEK LOKASI PTL -->
+        <section id="page-3" class="hidden fade-in flex-1 flex flex-col w-full max-w-3xl mx-auto space-y-2.5">
+            <!-- Kartu Gabungan: Pencarian + Tombol Scan + Hasil Digital Shelf-Tag -->
+            <div id="zoneResultContainer" class="fade-in flex-1 bg-white rounded-3xl shadow-2xl border-2 border-brand-blue overflow-hidden flex flex-col justify-between min-h-[calc(100dvh-105px)] sm:min-h-[560px]">
+                <!-- Bagian Pencarian & Tombol Scan Terintegrasi di Atas -->
+                <div class="p-3 sm:p-4 bg-white border-b border-slate-200 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-sm sm:text-base font-black text-slate-800 flex items-center gap-1.5">
+                            <i data-lucide="compass" class="w-4 h-4 text-brand-blue"></i>
+                            <span>Cek Lokasi PTL</span>
+                        </h2>
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-brand-blue bg-blue-50 px-2.5 py-0.5 rounded-full">
+                            Pencarian Rak
+                        </span>
+                    </div>
+
+                    <div class="flex gap-1.5">
+                        <div class="relative flex-1">
+                            <input type="text" id="zoneSearchInput" onkeyup="handleZoneSearchKey(event)" placeholder="Ketik PLU atau Barcode..." class="w-full pl-3.5 pr-9 py-2 bg-slate-50 border-2 border-slate-300 rounded-xl text-sm font-extrabold text-slate-800 focus:outline-none focus:border-brand-red focus:bg-white transition tabular-nums">
+                            <button onclick="clearZoneSearch()" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                <i data-lucide="x-circle" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <button onclick="searchZoneItem()" class="px-4 py-2 bg-brand-red hover:bg-brand-darkred text-white font-extrabold rounded-xl shadow-sm transition flex items-center gap-1.5 text-xs sm:text-sm">
+                            <i data-lucide="search" class="w-4 h-4"></i>
+                            <span>Cari</span>
+                        </button>
+                    </div>
+
+                    <button onclick="openLiveScanner('zone')" class="w-full py-2.5 bg-gradient-to-r from-brand-yellow to-amber-400 hover:from-amber-400 hover:to-brand-yellow text-slate-900 font-black rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-xs sm:text-sm border border-amber-400/80">
+                        <i data-lucide="scan-barcode" class="w-4 h-4 text-brand-red"></i>
+                        <span>SCAN BARCODE</span>
+                    </button>
+                </div>
+
+                <!-- Bagian Utama Lokasi PTL & DESCP (Biru) -->
+                <div class="bg-gradient-to-br from-brand-blue via-brand-blue to-brand-darkblue px-6 py-7 sm:px-10 sm:py-10 text-center text-white relative flex-1 flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <span class="w-9"></span>
+                        <span class="inline-block bg-brand-yellow text-slate-900 text-xs sm:text-sm font-black px-4 py-1 rounded-full uppercase tracking-widest shadow">
+                            LOKASI PTL
+                        </span>
+                        <button onclick="copyZoneLocation()" title="Salin Lokasi PTL" class="w-9 h-9 rounded-xl bg-white/15 hover:bg-white/25 flex items-center justify-center text-white transition">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <div id="resLokasiPtl" class="text-6xl sm:text-8xl font-black tracking-tight text-brand-yellow drop-shadow-md my-3 break-words tabular-nums">
+                        -
+                    </div>
+
+                    <div class="pt-4 border-t border-blue-400/30">
+                        <span class="text-xs font-bold text-blue-200 uppercase tracking-widest block">DESCP</span>
+                        <p id="resDescp" class="text-lg sm:text-2xl font-extrabold text-white mt-2 leading-snug">
+                            -
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Bagian Detail PLU, C2, RH (Tema Biru Selaras) -->
+                <div class="px-5 py-7 sm:px-7 sm:py-9 bg-brand-darkblue border-t border-blue-400/25">
+                    <div class="grid grid-cols-3 gap-2.5 sm:gap-4">
+                        <div class="bg-brand-blue/70 border border-blue-400/35 rounded-2xl py-5 px-3.5 sm:py-6 sm:px-5 text-center shadow-inner">
+                            <span class="text-[11px] sm:text-xs font-extrabold text-brand-yellow uppercase tracking-wider block">PLU</span>
+                            <p id="resPlu" class="text-lg sm:text-2xl font-black text-white mt-1.5 tabular-nums break-all">
+                                -
+                            </p>
+                        </div>
+
+                        <div class="bg-brand-blue/70 border border-blue-400/35 rounded-2xl py-5 px-3.5 sm:py-6 sm:px-5 text-center shadow-inner">
+                            <span class="text-[11px] sm:text-xs font-extrabold text-brand-yellow uppercase tracking-wider block">C2</span>
+                            <p id="resC2" class="text-lg sm:text-2xl font-black text-white mt-1.5 tabular-nums break-all">
+                                -
+                            </p>
+                        </div>
+
+                        <div class="bg-brand-blue/70 border border-blue-400/35 rounded-2xl py-5 px-3.5 sm:py-6 sm:px-5 text-center shadow-inner">
+                            <span class="text-[11px] sm:text-xs font-extrabold text-brand-yellow uppercase tracking-wider block">RH</span>
+                            <p id="resRh" class="text-lg sm:text-2xl font-black text-white mt-1.5 tabular-nums break-all">
+                                -
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="zoneNotFoundBox" class="hidden bg-red-50 border-2 border-red-200 rounded-3xl p-6 text-center space-y-2">
+                <div class="w-12 h-12 rounded-2xl bg-red-100 text-brand-red mx-auto flex items-center justify-center">
+                    <i data-lucide="alert-circle" class="w-6 h-6"></i>
+                </div>
+                <h3 class="font-extrabold text-brand-red text-base">Produk Tidak Ditemukan</h3>
+                <p class="text-xs text-slate-600">PLU atau Barcode tersebut tidak terdaftar di Data Master (Halaman 1).</p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL 1: TAMBAH PLU MASSAL -->
+    <div id="bulkPluModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden fade-in">
+            <div class="bg-brand-red text-white px-5 py-3.5 flex items-center justify-between">
+                <h3 class="font-bold text-sm flex items-center gap-2">
+                    <i data-lucide="list-plus" class="w-4 h-4 text-brand-yellow"></i>
+                    Tambah PLU Massal ke Stok Opname
+                </h3>
+                <button onclick="closeBulkPluModal()" class="text-white/80 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-3">
+                <p class="text-xs text-slate-600">
+                    Tempel (<em>paste</em>) daftar <strong>PLU</strong> atau <strong>Barcode</strong> di bawah ini (pisahkan dengan baris baru/Enter, spasi, atau koma). Data otomatis ditarik dari Halaman 1 (Master).
+                </p>
+                <textarea id="bulkPluTextarea" rows="7" placeholder="Contoh:&#10;100234&#10;100235&#10;8992761123456" class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:border-brand-blue focus:bg-white"></textarea>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button onclick="closeBulkPluModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">
+                        Batal
+                    </button>
+                    <button onclick="processBulkPlu()" class="px-5 py-2.5 bg-brand-red hover:bg-brand-darkred text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        <span>Proses & Masukkan ke Tabel</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL UPDATE OH MASSAL (COPY PASTE PLU & OH) -->
+    <div id="updateOhModal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden fade-in">
+            <div class="bg-brand-blue text-white px-5 py-3.5 flex items-center justify-between">
+                <h3 class="font-bold text-sm flex items-center gap-2">
+                    <i data-lucide="refresh-cw" class="w-4 h-4 text-brand-yellow"></i>
+                    Update OH Massal (Copy-Paste PLU & OH)
+                </h3>
+                <button onclick="closeUpdateOhModal()" class="text-white/80 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="p-5 space-y-3">
+                <p class="text-xs text-slate-600 leading-relaxed">
+                    Salin (<em>copy</em>) 2 kolom dari Excel berisi <strong>PLU</strong> dan <strong>OH</strong> lalu tempel (<em>paste</em>) di bawah ini (1 baris untuk 1 item, pisahkan dengan Tab, Spasi, Koma, atau Titik Koma).
+                </p>
+                <textarea id="updateOhTextarea" rows="7" placeholder="Contoh (bisa langsung copy-paste 2 kolom dari Excel):&#10;100012	50&#10;100045	72&#10;100089	30" class="w-full p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:border-brand-blue focus:bg-white"></textarea>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button onclick="closeUpdateOhModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">
+                        Batal
+                    </button>
+                    <button onclick="processBulkUpdateOh()" class="px-5 py-2.5 bg-brand-blue hover:bg-brand-darkblue text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5">
+                        <i data-lucide="check" class="w-4 h-4 text-brand-yellow"></i>
+                        <span>Update OH Sekarang</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL LIVE BARCODE SCANNER -->
+    <div id="liveScannerModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden fade-in flex flex-col">
+            <div class="bg-brand-blue text-white px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="scan-barcode" class="w-5 h-5 text-brand-yellow"></i>
+                    <span class="font-extrabold text-sm">Live Barcode Scanner</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button id="toggleTorchBtn" onclick="toggleScannerTorch()" class="hidden px-2.5 py-1.5 bg-white/15 hover:bg-white/25 rounded-xl text-xs font-bold text-brand-yellow flex items-center gap-1 transition">
+                        <i data-lucide="flashlight" class="w-3.5 h-3.5"></i>
+                        <span>Senter</span>
+                    </button>
+                    <button onclick="closeLiveScanner()" class="w-8 h-8 rounded-xl bg-white/15 hover:bg-brand-red flex items-center justify-center text-white transition">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-4 space-y-3">
+                <div class="relative w-full aspect-[4/3] bg-black rounded-2xl overflow-hidden border-2 border-brand-yellow/60">
+                    <div id="liveScannerReader" class="w-full h-full"></div>
+                    <!-- Garis Panduan Bidik Merah -->
+                    <div class="pointer-events-none absolute inset-x-6 top-1/2 -translate-y-1/2 h-0.5 bg-brand-red shadow-[0_0_8px_#D71920]"></div>
+                </div>
+                <p id="scannerStatusMsg" class="text-center text-xs text-slate-300 font-medium">
+                    Arahkan garis merah ke barcode produk...
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: KONFIRMASI KUSTOM -->
+    <div id="confirmModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full shadow-2xl p-5 space-y-4 fade-in">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-red-100 text-brand-red flex items-center justify-center shrink-0">
+                    <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 id="confirmTitle" class="font-bold text-slate-800 text-base">Konfirmasi</h3>
+                    <p id="confirmMessage" class="text-xs text-slate-500 mt-0.5">Apakah Anda yakin?</p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeConfirmModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">
+                    Batal
+                </button>
+                <button id="confirmActionBtn" class="px-4 py-2 bg-brand-red hover:bg-brand-darkred text-white font-bold text-xs rounded-xl shadow">
+                    Ya, Lanjutkan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toastBox" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-2.5 text-xs sm:text-sm font-semibold border border-slate-700">
+            <span id="toastIcon" class="w-2.5 h-2.5 rounded-full bg-brand-yellow"></span>
+            <span id="toastText">Notifikasi</span>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // =========================================================================
+        // 1. STATE & DEVICE-BOUND STORAGE (INDEXEDDB + LOCALSTORAGE BACKUP)
+        // =========================================================================
+        const DB_NAME = 'DataStockDeviceDB';
+        const DB_VERSION = 1;
+        let db = null;
+
+        let masterList = [];
+        let masterMap = new Map();
+        let barcodeMap = new Map();
+        let masterMeta = { count: 0, updatedAt: null };
+        let opnameList = [];
+        let currentOpnameFilter = 'all';
+
+        function getOrCreateDeviceId() {
+            let id = localStorage.getItem('datastock_device_id');
+            if (!id) {
+                id = 'DEV-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+                localStorage.setItem('datastock_device_id', id);
+            }
+            return id;
+        }
+        const CURRENT_DEVICE_ID = getOrCreateDeviceId();
+
+        function normalizeCode(val) {
+            return String(val ?? '').trim().replace(/^0+/, '') || String(val ?? '').trim();
+        }
+
+        function saveLocalBackup(key, data) {
+            try {
+                localStorage.setItem(`ds_${CURRENT_DEVICE_ID}_${key}`, JSON.stringify(data));
+            } catch (e) {}
+        }
+
+        function restoreFromLocalBackup(key) {
+            try {
+                const raw = localStorage.getItem(`ds_${CURRENT_DEVICE_ID}_${key}`);
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function saveToStore(storeKey, data) {
+            saveLocalBackup(storeKey, data);
+            if (!db) return Promise.resolve();
+            return new Promise((resolve) => {
+                try {
+                    const tx = db.transaction('app_store', 'readwrite');
+                    const store = tx.objectStore('app_store');
+                    store.put({ id: `${CURRENT_DEVICE_ID}_${storeKey}`, payload: data });
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => resolve();
+                } catch (e) {
+                    resolve();
+                }
+            });
+        }
+
+        function loadFromStore(storeKey) {
+            if (!db) return Promise.resolve(restoreFromLocalBackup(storeKey));
+            return new Promise((resolve) => {
+                try {
+                    const tx = db.transaction('app_store', 'readonly');
+                    const store = tx.objectStore('app_store');
+                    const req = store.get(`${CURRENT_DEVICE_ID}_${storeKey}`);
+                    req.onsuccess = () => {
+                        if (req.result && req.result.payload) {
+                            resolve(req.result.payload);
+                        } else {
+                            resolve(restoreFromLocalBackup(storeKey));
+                        }
+                    };
+                    req.onerror = () => resolve(restoreFromLocalBackup(storeKey));
+                } catch (e) {
+                    resolve(restoreFromLocalBackup(storeKey));
+                }
+            });
+        }
+
+        async function initDatabase() {
+            if (navigator.storage && navigator.storage.persist) {
+                try { await navigator.storage.persist(); } catch (e) {}
+            }
+
+            await new Promise((resolve) => {
+                try {
+                    const req = indexedDB.open(DB_NAME, DB_VERSION);
+                    req.onupgradeneeded = (e) => {
+                        const database = e.target.result;
+                        if (!database.objectStoreNames.contains('app_store')) {
+                            database.createObjectStore('app_store', { keyPath: 'id' });
+                        }
+                    };
+                    req.onsuccess = (e) => {
+                        db = e.target.result;
+                        resolve();
+                    };
+                    req.onerror = () => resolve();
+                } catch (e) {
+                    resolve();
+                }
+            });
+
+            const savedMaster = await loadFromStore('master_data');
+            if (savedMaster && Array.isArray(savedMaster.items)) {
+                masterList = savedMaster.items;
+                masterMeta = savedMaster.meta || { count: masterList.length, updatedAt: '-' };
+                rebuildMasterIndexes();
+            }
+
+            const savedOpname = await loadFromStore('opname_data');
+            if (savedOpname && Array.isArray(savedOpname.items)) {
+                opnameList = savedOpname.items;
+            }
+
+            updateMasterUI();
+        }
+
+        function rebuildMasterIndexes() {
+            masterMap.clear();
+            barcodeMap.clear();
+            for (let i = 0; i < masterList.length; i++) {
+                const item = masterList[i];
+                const rawPlu = String(item.plu || '').trim();
+                const normPlu = normalizeCode(rawPlu);
+                if (rawPlu) masterMap.set(rawPlu, item);
+                if (normPlu) masterMap.set(normPlu, item);
+
+                const rawBc = String(item.barcode || '').trim();
+                const normBc = normalizeCode(rawBc);
+                if (rawBc) barcodeMap.set(rawBc, item);
+                if (normBc) barcodeMap.set(normBc, item);
+            }
+        }
+
+        function findMasterItem(code) {
+            const raw = String(code || '').trim();
+            if (!raw) return null;
+            const norm = normalizeCode(raw);
+            return masterMap.get(raw) || masterMap.get(norm) || barcodeMap.get(raw) || barcodeMap.get(norm) || null;
+        }
+
+        // =========================================================================
+        // 2. NAVIGASI HALAMAN
+        // =========================================================================
+        function switchPage(pageNum) {
+            closeLiveScanner();
+            [1, 2, 3].forEach((num) => {
+                const pageEl = document.getElementById(`page-${num}`);
+                const tabEl = document.getElementById(`tab-${num}`);
+                if (num === pageNum) {
+                    pageEl.classList.remove('hidden');
+                    tabEl.classList.add('active');
+                } else {
+                    pageEl.classList.add('hidden');
+                    tabEl.classList.remove('active');
+                }
+            });
+            if (pageNum === 2) renderOpnameTable();
+            if (pageNum === 3) {
+                // Pastikan keyboard tidak muncul otomatis saat pindah ke Halaman 3
+                if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                    document.activeElement.blur();
+                }
+            }
+        }
+
+        // =========================================================================
+        // 3. HALAMAN 1: UPLOAD EXCEL & DATA MASTER
+        // =========================================================================
+        function updateMasterUI() {
+            const count = masterList.length;
+            document.getElementById('masterCountMobile').innerText = `${formatNumber(count)} Item`;
+            document.getElementById('masterCountDesktop').innerText = `${formatNumber(count)} Produk Aktif`;
+            document.getElementById('statMasterTotal').innerText = `${formatNumber(count)} Item`;
+            document.getElementById('statMasterUpdated').innerText = masterMeta.updatedAt || 'Belum ada data';
+        }
+
+        function matchColumnIndex(headers, aliases) {
+            for (let i = 0; i < headers.length; i++) {
+                const h = String(headers[i] || '').trim().toUpperCase().replace(/[\s_-]+/g, ' ');
+                if (aliases.includes(h)) return i;
+            }
+            for (let i = 0; i < headers.length; i++) {
+                const h = String(headers[i] || '').trim().toUpperCase();
+                for (const alias of aliases) {
+                    if (h.includes(alias)) return i;
+                }
+            }
+            return -1;
+        }
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const progressBox = document.getElementById('uploadProgressBox');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const statusText = document.getElementById('uploadStatusText');
+            const percentText = document.getElementById('uploadPercentText');
+
+            progressBox.classList.remove('hidden');
+            progressBar.style.width = '20%';
+            percentText.innerText = '20%';
+            statusText.innerText = 'Membaca file Excel...';
+
+            try {
+                const buffer = await file.arrayBuffer();
+                progressBar.style.width = '50%';
+                percentText.innerText = '50%';
+                statusText.innerText = 'Memetakan kolom PLU, DESCP, BARCODE, C2, RH, LOKASI PTL, HPP, OH REAL...';
+
+                const workbook = XLSX.read(buffer, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+
+                if (!rows || rows.length < 2) {
+                    throw new Error('File Excel kosong atau tidak memiliki baris data.');
+                }
+
+                let headerRowIdx = 0;
+                for (let r = 0; r < Math.min(rows.length, 15); r++) {
+                    const rowUpper = rows[r].map(c => String(c || '').trim().toUpperCase());
+                    if (rowUpper.includes('PLU') || rowUpper.includes('DESCP') || rowUpper.includes('BARCODE')) {
+                        headerRowIdx = r;
+                        break;
+                    }
+                }
+
+                const headers = rows[headerRowIdx];
+                const idxPlu = matchColumnIndex(headers, ['PLU', 'KODE PLU', 'ITEM CODE', 'SKU']);
+                const idxDescp = matchColumnIndex(headers, ['DESCP', 'DESCRIPTION', 'DESKRIPSI', 'NAMA BARANG', 'NAMA PRODUK']);
+                const idxBarcode = matchColumnIndex(headers, ['BARCODE', 'EAN', 'UPC', 'KODE BARCODE']);
+                const idxC2 = matchColumnIndex(headers, ['C2', 'TAG', 'FLAG', 'STATUS']);
+                const idxRh = matchColumnIndex(headers, ['RH', 'RACK', 'SHELVING', 'HOLDING']);
+                const idxLokasi = matchColumnIndex(headers, ['LOKASI PTL', 'LOKASI', 'ZONA', 'PTL', 'RAK', 'SHELF']);
+                const idxHpp = matchColumnIndex(headers, ['HPP', 'COST', 'HARGA POKOK', 'PRICE']);
+                const idxOh = matchColumnIndex(headers, ['OH REAL', 'OH', 'ON HAND', 'STOK', 'QTY', 'SOH']);
+
+                if (idxPlu === -1 && idxBarcode === -1) {
+                    throw new Error('Kolom PLU atau BARCODE tidak ditemukan pada file Excel.');
+                }
+
+                const parsedItems = [];
+                for (let r = headerRowIdx + 1; r < rows.length; r++) {
+                    const row = rows[r];
+                    if (!row || row.length === 0) continue;
+
+                    const plu = idxPlu !== -1 ? String(row[idxPlu] ?? '').trim() : '';
+                    const barcode = idxBarcode !== -1 ? String(row[idxBarcode] ?? '').trim() : '';
+                    if (!plu && !barcode) continue;
+
+                    parsedItems.push({
+                        plu: plu || barcode,
+                        descp: idxDescp !== -1 ? String(row[idxDescp] ?? '').trim() : '-',
+                        barcode: barcode || '-',
+                        c2: idxC2 !== -1 ? String(row[idxC2] ?? '').trim() : '-',
+                        rh: idxRh !== -1 ? String(row[idxRh] ?? '').trim() : '-',
+                        lokasiPtl: idxLokasi !== -1 ? String(row[idxLokasi] ?? '').trim() : '-',
+                        hpp: idxHpp !== -1 ? parseFloat(String(row[idxHpp]).replace(/[^0-9.-]/g, '')) || 0 : 0,
+                        ohReal: idxOh !== -1 ? parseFloat(String(row[idxOh]).replace(/[^0-9.-]/g, '')) || 0 : 0
+                    });
+                }
+
+                progressBar.style.width = '85%';
+                percentText.innerText = '85%';
+                statusText.innerText = 'Menyimpan ke database perangkat...';
+
+                masterList = parsedItems;
+                const nowStr = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+                masterMeta = { count: masterList.length, updatedAt: nowStr };
+
+                rebuildMasterIndexes();
+                syncOpnameWithMaster();
+                await saveToStore('master_data', { items: masterList, meta: masterMeta });
+                await saveToStore('opname_data', { items: opnameList });
+
+                updateMasterUI();
+                renderOpnameTable();
+
+                progressBar.style.width = '100%';
+                percentText.innerText = '100%';
+                statusText.innerText = `Selesai! ${formatNumber(masterList.length)} produk dimuat.`;
+                showToast(`Berhasil memuat ${formatNumber(masterList.length)} Data Master!`);
+
+                setTimeout(() => progressBox.classList.add('hidden'), 2000);
+            } catch (err) {
+                progressBox.classList.add('hidden');
+                showToast(err.message || 'Gagal membaca file Excel.', true);
+            } finally {
+                event.target.value = '';
+            }
+        }
+
+        function syncOpnameWithMaster() {
+            if (!opnameList.length || !masterList.length) return;
+            opnameList = opnameList.map(item => {
+                const m = findMasterItem(item.plu) || findMasterItem(item.barcode);
+                if (!m) return item;
+                return {
+                    ...item,
+                    descp: m.descp,
+                    barcode: m.barcode,
+                    c2: m.c2,
+                    lokasiPtl: m.lokasiPtl,
+                    hpp: m.hpp,
+                    ohReal: m.ohReal
+                };
+            });
+        }
+
+        async function loadSampleMasterData() {
+            masterList = [
+                { plu: '100012', descp: 'INDOMIE GORENG SPECIAL 85G', barcode: '089686010947', c2: 'A', rh: 'H-01', lokasiPtl: 'R01-A2', hpp: 2850, ohReal: 48 },
+                { plu: '100045', descp: 'AQUA AIR MINERAL 600ML', barcode: '8886008101053', c2: 'A', rh: 'H-02', lokasiPtl: 'R02-B1', hpp: 3100, ohReal: 72 },
+                { plu: '100089', descp: 'TEH BOTOL SOSRO KOTAK 250ML', barcode: '8996001301012', c2: 'B', rh: 'H-03', lokasiPtl: 'R03-C4', hpp: 3400, ohReal: 36 },
+                { plu: '100114', descp: 'CHITATO SAPI PANGGANG 68G', barcode: '089686598100', c2: 'A', rh: 'H-01', lokasiPtl: 'R04-A1', hpp: 9800, ohReal: 20 },
+                { plu: '100158', descp: 'ULTRA MILK COKLAT 250ML', barcode: '8998009010224', c2: 'A', rh: 'H-04', lokasiPtl: 'R05-D3', hpp: 5900, ohReal: 40 }
+            ];
+            const nowStr = new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+            masterMeta = { count: masterList.length, updatedAt: nowStr };
+            rebuildMasterIndexes();
+            await saveToStore('master_data', { items: masterList, meta: masterMeta });
+            updateMasterUI();
+            showToast('5 Data Master contoh berhasil dimuat!');
+        }
+
+        function confirmClearMaster() {
+            openConfirmModal('Hapus Data Master?', 'Seluruh data master di perangkat ini akan dihapus.', async () => {
+                masterList = [];
+                masterMap.clear();
+                barcodeMap.clear();
+                masterMeta = { count: 0, updatedAt: 'Belum ada data' };
+                await saveToStore('master_data', { items: [], meta: masterMeta });
+                updateMasterUI();
+                showToast('Data Master berhasil dihapus.');
+            });
+        }
+
+        // =========================================================================
+        // 4. HALAMAN 2: STOK OPNAME & INPUT FISIK
+        // =========================================================================
+        function openBulkPluModal() {
+            document.getElementById('bulkPluTextarea').value = '';
+            document.getElementById('bulkPluModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('bulkPluTextarea').focus(), 100);
+        }
+
+        function closeBulkPluModal() {
+            document.getElementById('bulkPluModal').classList.add('hidden');
+        }
+
+        async function processBulkPlu() {
+            const raw = document.getElementById('bulkPluTextarea').value;
+            const tokens = raw.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+            if (tokens.length === 0) {
+                showToast('Masukkan minimal 1 PLU atau Barcode.', true);
+                return;
+            }
+
+            let addedCount = 0;
+            let notFoundCount = 0;
+            const existingPluSet = new Set(opnameList.map(i => normalizeCode(i.plu)));
+
+            tokens.forEach(token => {
+                const m = findMasterItem(token);
+                if (m) {
+                    const normPlu = normalizeCode(m.plu);
+                    if (!existingPluSet.has(normPlu)) {
+                        existingPluSet.add(normPlu);
+                        opnameList.push({
+                            plu: m.plu,
+                            descp: m.descp,
+                            barcode: m.barcode,
+                            c2: m.c2,
+                            lokasiPtl: m.lokasiPtl,
+                            hpp: m.hpp,
+                            ohReal: m.ohReal,
+                            fisik: ''
+                        });
+                        addedCount++;
+                    }
+                } else {
+                    notFoundCount++;
+                }
+            });
+
+            closeBulkPluModal();
+            await saveToStore('opname_data', { items: opnameList });
+            renderOpnameTable();
+
+            if (notFoundCount > 0) {
+                showToast(`${addedCount} item ditambahkan, ${notFoundCount} kode tidak ada di Master.`);
+            } else {
+                showToast(`${addedCount} item berhasil ditambahkan ke tabel!`);
+            }
+        }
+
+        function openUpdateOhModal() {
+            document.getElementById('updateOhTextarea').value = '';
+            document.getElementById('updateOhModal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('updateOhTextarea').focus(), 100);
+        }
+
+        function closeUpdateOhModal() {
+            document.getElementById('updateOhModal').classList.add('hidden');
+        }
+
+        async function processBulkUpdateOh() {
+            const raw = document.getElementById('updateOhTextarea').value;
+            const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+
+            if (lines.length === 0) {
+                showToast('Tempel minimal 1 baris data PLU dan OH.', true);
+                return;
+            }
+
+            const ohUpdates = new Map();
+            let invalidLines = 0;
+
+            lines.forEach(line => {
+                // Pisahkan berdasarkan Tab, titik koma, koma, atau spasi
+                const parts = line.split(/[\t;,]+|\s+/).map(p => p.trim()).filter(Boolean);
+                if (parts.length < 2) {
+                    invalidLines++;
+                    return;
+                }
+                const code = parts[0];
+                const ohRaw = parts[parts.length - 1].replace(/[^0-9.-]/g, '');
+                const ohVal = parseFloat(ohRaw);
+
+                if (!code || isNaN(ohVal)) {
+                    invalidLines++;
+                    return;
+                }
+
+                ohUpdates.set(code, ohVal);
+                ohUpdates.set(normalizeCode(code), ohVal);
+            });
+
+            if (ohUpdates.size === 0) {
+                showToast('Format tidak valid. Pastikan setiap baris berisi PLU dan angka OH.', true);
+                return;
+            }
+
+            let updatedMasterCount = 0;
+            let updatedOpnameCount = 0;
+
+            // 1. Update OH REAL di Data Master (Halaman 1)
+            masterList.forEach(item => {
+                const rawPlu = String(item.plu || '').trim();
+                const normPlu = normalizeCode(rawPlu);
+                const rawBc = String(item.barcode || '').trim();
+                const normBc = normalizeCode(rawBc);
+
+                let newOh = undefined;
+                if (ohUpdates.has(rawPlu)) newOh = ohUpdates.get(rawPlu);
+                else if (ohUpdates.has(normPlu)) newOh = ohUpdates.get(normPlu);
+                else if (ohUpdates.has(rawBc)) newOh = ohUpdates.get(rawBc);
+                else if (ohUpdates.has(normBc)) newOh = ohUpdates.get(normBc);
+
+                if (newOh !== undefined) {
+                    item.ohReal = newOh;
+                    updatedMasterCount++;
+                }
+            });
+
+            // 2. Update OH REAL di Tabel SO (Halaman 2)
+            opnameList.forEach(item => {
+                const rawPlu = String(item.plu || '').trim();
+                const normPlu = normalizeCode(rawPlu);
+                const rawBc = String(item.barcode || '').trim();
+                const normBc = normalizeCode(rawBc);
+
+                let newOh = undefined;
+                if (ohUpdates.has(rawPlu)) newOh = ohUpdates.get(rawPlu);
+                else if (ohUpdates.has(normPlu)) newOh = ohUpdates.get(normPlu);
+                else if (ohUpdates.has(rawBc)) newOh = ohUpdates.get(rawBc);
+                else if (ohUpdates.has(normBc)) newOh = ohUpdates.get(normBc);
+
+                if (newOh !== undefined) {
+                    item.ohReal = newOh;
+                    updatedOpnameCount++;
+                }
+            });
+
+            closeUpdateOhModal();
+
+            if (updatedMasterCount > 0) {
+                rebuildMasterIndexes();
+                await saveToStore('master_data', { items: masterList, meta: masterMeta });
+                updateMasterUI();
+            }
+            if (updatedOpnameCount > 0 || updatedMasterCount > 0) {
+                await saveToStore('opname_data', { items: opnameList });
+                renderOpnameTable();
+            }
+
+            if (updatedMasterCount === 0 && updatedOpnameCount === 0) {
+                showToast('Tidak ada PLU yang cocok di Master maupun tabel SO.', true);
+            } else {
+                showToast(`OH diperbarui: ${updatedMasterCount} di Master, ${updatedOpnameCount} di tabel SO!`);
+            }
+        }
+
+        function setOpnameFilter(filterType) {
+            currentOpnameFilter = filterType;
+            ['all', 'uncounted', 'counted', 'diff'].forEach(f => {
+                const btn = document.getElementById(`filter-${f}`);
+                if (btn) btn.classList.toggle('active', f === filterType);
+            });
+            renderOpnameTable();
+        }
+
+        function handleOpnameSearchKey(e) {
+            if (e.key === 'Enter') {
+                renderOpnameTable();
+            }
+        }
+
+        function clearOpnameSearch() {
+            document.getElementById('searchOpnameInput').value = '';
+            renderOpnameTable();
+        }
+
+        function renderOpnameTable() {
+            const tbody = document.getElementById('opnameTableBody');
+            const query = (document.getElementById('searchOpnameInput')?.value || '').trim().toLowerCase();
+            const clearBtn = document.getElementById('clearSearchBtn');
+            if (clearBtn) clearBtn.classList.toggle('hidden', query.length === 0);
+
+            let countedTotal = 0;
+            let totalSelisihQty = 0;
+            let totalSelisihRp = 0;
+
+            opnameList.forEach(item => {
+                const hasFisik = item.fisik !== '' && item.fisik !== null && !isNaN(Number(item.fisik));
+                if (hasFisik) {
+                    countedTotal++;
+                    const selisih = Number(item.fisik) - Number(item.ohReal || 0);
+                    totalSelisihQty += selisih;
+                    totalSelisihRp += selisih * Number(item.hpp || 0);
+                }
+            });
+
+            const totalItems = opnameList.length;
+            const pct = totalItems > 0 ? Math.round((countedTotal / totalItems) * 100) : 0;
+            document.getElementById('summaryTotalItem').innerText = formatNumber(totalItems);
+            document.getElementById('summaryProgressText').innerText = `${pct}% dihitung`;
+            document.getElementById('summarySelisihItem').innerText = (totalSelisihQty > 0 ? '+' : '') + formatNumber(totalSelisihQty);
+            document.getElementById('summarySelisihRp').innerText = formatRupiah(totalSelisihRp);
+
+            const filtered = opnameList.map((item, idx) => ({ item, idx })).filter(({ item }) => {
+                const hasFisik = item.fisik !== '' && item.fisik !== null && !isNaN(Number(item.fisik));
+                const selisih = hasFisik ? Number(item.fisik) - Number(item.ohReal || 0) : 0;
+
+                if (currentOpnameFilter === 'uncounted' && hasFisik) return false;
+                if (currentOpnameFilter === 'counted' && !hasFisik) return false;
+                if (currentOpnameFilter === 'diff' && (!hasFisik || selisih === 0)) return false;
+
+                if (!query) return true;
+                return (
+                    String(item.plu).toLowerCase().includes(query) ||
+                    String(item.barcode).toLowerCase().includes(query) ||
+                    String(item.descp).toLowerCase().includes(query) ||
+                    String(item.lokasiPtl).toLowerCase().includes(query)
+                );
+            });
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="11" class="py-12 text-center text-slate-400">
+                            ${totalItems === 0
+                                ? 'Belum ada item di daftar stok. Klik <strong class="text-brand-red">"Tambah PLU"</strong> untuk memasukkan daftar PLU.'
+                                : 'Tidak ada item yang cocok dengan pencarian/filter saat ini.'}
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(({ item, idx }) => {
+                const hasFisik = item.fisik !== '' && item.fisik !== null && !isNaN(Number(item.fisik));
+                const selisih = hasFisik ? Number(item.fisik) - Number(item.ohReal || 0) : 0;
+                const rpSelisih = selisih * Number(item.hpp || 0);
+
+                let selisihClass = 'text-slate-400';
+                if (hasFisik) {
+                    selisihClass = selisih === 0 ? 'text-emerald-600 font-bold' : (selisih < 0 ? 'text-brand-red font-extrabold' : 'text-brand-blue font-extrabold');
+                }
+
+                return `
+                    <tr class="hover:bg-blue-50/40 transition-colors">
+                        <td class="py-2 px-2.5 font-extrabold text-slate-800">${escapeHtml(item.plu)}</td>
+                        <td class="py-2 px-2.5 font-medium text-slate-700 whitespace-normal min-w-[180px] leading-tight">${escapeHtml(item.descp)}</td>
+                        <td class="py-2 px-2.5 text-slate-500 font-mono text-[10px] sm:text-[11px]">${escapeHtml(item.barcode)}</td>
+                        <td class="py-2 px-2 text-center">
+                            <span class="px-1.5 py-0.5 rounded bg-slate-100 font-bold text-[10px] text-slate-700">${escapeHtml(item.c2)}</span>
+                        </td>
+                        <td class="py-2 px-2 text-center">
+                            <span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-black text-[10px] sm:text-[11px]">${escapeHtml(item.lokasiPtl)}</span>
+                        </td>
+                        <td class="py-2 px-2.5 text-right text-slate-600">${formatNumber(item.hpp)}</td>
+                        <td class="py-2 px-2.5 text-right font-bold text-slate-800">${formatNumber(item.ohReal)}</td>
+                        <td class="py-1.5 px-1.5 text-center bg-red-50/40">
+                            <input type="number" step="any" value="${hasFisik ? item.fisik : ''}"
+                                onchange="handleFisikInput(${idx}, this.value)"
+                                onkeyup="if(event.key==='Enter'){ this.blur(); }"
+                                placeholder="0"
+                                class="w-16 sm:w-20 px-1.5 py-1 text-center font-black text-xs sm:text-sm text-slate-900 bg-white border border-slate-300 focus:border-brand-red rounded-lg focus:outline-none">
+                        </td>
+                        <td class="py-2 px-2.5 text-right ${selisihClass}">${hasFisik ? ((selisih > 0 ? '+' : '') + formatNumber(selisih)) : '-'}</td>
+                        <td class="py-2 px-2.5 text-right ${selisihClass}">${hasFisik ? formatRupiah(rpSelisih) : '-'}</td>
+                        <td class="py-2 px-1.5 text-center">
+                            <button onclick="removeOpnameRow(${idx})" class="p-1 text-slate-400 hover:text-brand-red rounded-lg transition" title="Hapus baris">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            lucide.createIcons();
+        }
+
+        async function handleFisikInput(index, val) {
+            if (!opnameList[index]) return;
+            const trimmed = String(val ?? '').trim();
+            opnameList[index].fisik = trimmed === '' ? '' : Number(trimmed);
+            await saveToStore('opname_data', { items: opnameList });
+            renderOpnameTable();
+        }
+
+        async function removeOpnameRow(index) {
+            opnameList.splice(index, 1);
+            await saveToStore('opname_data', { items: opnameList });
+            renderOpnameTable();
+        }
+
+        function confirmResetFisik() {
+            openConfirmModal('Reset Kolom Fisik?', 'Semua angka inputan FISIK akan dikosongkan kembali.', async () => {
+                opnameList.forEach(item => item.fisik = '');
+                await saveToStore('opname_data', { items: opnameList });
+                renderOpnameTable();
+                showToast('Kolom FISIK berhasil direset.');
+            });
+        }
+
+        function confirmResetAllOpname() {
+            openConfirmModal('Reset Semua Data Opname?', 'Seluruh daftar item di tabel Stok Opname akan dihapus.', async () => {
+                opnameList = [];
+                await saveToStore('opname_data', { items: [] });
+                renderOpnameTable();
+                showToast('Tabel Stok Opname dikosongkan.');
+            });
+        }
+
+        function exportOpnameToExcel() {
+            if (opnameList.length === 0) {
+                showToast('Tidak ada data untuk diexport.', true);
+                return;
+            }
+            const exportRows = opnameList.map(item => {
+                const hasFisik = item.fisik !== '' && item.fisik !== null && !isNaN(Number(item.fisik));
+                const fisikVal = hasFisik ? Number(item.fisik) : 0;
+                const selisih = hasFisik ? fisikVal - Number(item.ohReal || 0) : 0;
+                const rpSelisih = selisih * Number(item.hpp || 0);
+                return {
+                    'PLU': item.plu,
+                    'DESCP': item.descp,
+                    'BARCODE': item.barcode,
+                    'C2': item.c2,
+                    'LOKASI PTL': item.lokasiPtl,
+                    'HPP': Number(item.hpp || 0),
+                    'OH REAL': Number(item.ohReal || 0),
+                    'FISIK': hasFisik ? fisikVal : '',
+                    'SELISIH': hasFisik ? selisih : '',
+                    'RP SELISIH': hasFisik ? rpSelisih : ''
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(exportRows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Stok_Opname');
+            const dateTag = new Date().toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `DataStock_Opname_${dateTag}.xlsx`);
+            showToast('File Excel berhasil diunduh!');
+        }
+
+        // =========================================================================
+        // 5. HALAMAN 3: CEK LOKASI PTL
+        // =========================================================================
+        function handleZoneSearchKey(event) {
+            if (event.key === 'Enter') {
+                searchZoneItem();
+            }
+        }
+
+        function clearZoneSearch() {
+            const input = document.getElementById('zoneSearchInput');
+            input.value = '';
+            document.getElementById('resLokasiPtl').innerText = '-';
+            document.getElementById('resDescp').innerText = '-';
+            document.getElementById('resPlu').innerText = '-';
+            document.getElementById('resC2').innerText = '-';
+            document.getElementById('resRh').innerText = '-';
+            document.getElementById('zoneResultContainer').classList.remove('hidden');
+            document.getElementById('zoneNotFoundBox').classList.add('hidden');
+            input.focus();
+        }
+
+        function searchZoneItem() {
+            const query = (document.getElementById('zoneSearchInput').value || '').trim();
+            if (!query) return;
+
+            const resultBox = document.getElementById('zoneResultContainer');
+            const notFoundBox = document.getElementById('zoneNotFoundBox');
+            const item = findMasterItem(query);
+
+            if (item) {
+                document.getElementById('resLokasiPtl').innerText = item.lokasiPtl || '-';
+                document.getElementById('resDescp').innerText = item.descp || '-';
+                document.getElementById('resPlu').innerText = item.plu || '-';
+                document.getElementById('resC2').innerText = item.c2 || '-';
+                document.getElementById('resRh').innerText = item.rh || '-';
+
+                resultBox.classList.remove('hidden');
+                notFoundBox.classList.add('hidden');
+            } else {
+                document.getElementById('resLokasiPtl').innerText = '-';
+                document.getElementById('resDescp').innerText = '-';
+                document.getElementById('resPlu').innerText = '-';
+                document.getElementById('resC2').innerText = '-';
+                document.getElementById('resRh').innerText = '-';
+                resultBox.classList.remove('hidden');
+                notFoundBox.classList.remove('hidden');
+            }
+        }
+
+        function copyZoneLocation() {
+            const loc = document.getElementById('resLokasiPtl').innerText;
+            const temp = document.createElement('input');
+            temp.value = loc;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            showToast(`Lokasi "${loc}" disalin!`);
+        }
+
+        // =========================================================================
+        // 6. LIVE BARCODE SCANNER REAL-TIME (HTML5-QRCODE)
+        // =========================================================================
+        let html5QrScanner = null;
+        let currentScanTarget = 'zone';
+        let isTorchOn = false;
+        let isScannerRunning = false;
+
+        function sanitizeBarcodeDigits(rawText) {
+            const trimmed = String(rawText || '').trim();
+            if (!trimmed) return '';
+            const digitsOnly = trimmed.replace(/\D/g, '');
+            if (digitsOnly.length >= 6 && digitsOnly.length === trimmed.replace(/[\s-]/g, '').length) {
+                return digitsOnly;
+            }
+            return trimmed;
+        }
+
+        async function openLiveScanner(target) {
+            currentScanTarget = target;
+            isTorchOn = false;
+            const modal = document.getElementById('liveScannerModal');
+            const statusMsg = document.getElementById('scannerStatusMsg');
+            const torchBtn = document.getElementById('toggleTorchBtn');
+
+            torchBtn.classList.add('hidden');
+            statusMsg.innerText = 'Membuka kamera scanner...';
+            modal.classList.remove('hidden');
+
+            try {
+                if (!html5QrScanner) {
+                    html5QrScanner = new Html5Qrcode('liveScannerReader', { verbose: false });
+                }
+
+                const config = {
+                    fps: 15,
+                    qrbox: { width: 250, height: 130 },
+                    aspectRatio: 1.333333,
+                    formatsToSupport: [
+                        Html5QrcodeSupportedFormats.EAN_13,
+                        Html5QrcodeSupportedFormats.EAN_8,
+                        Html5QrcodeSupportedFormats.UPC_A,
+                        Html5QrcodeSupportedFormats.UPC_E,
+                        Html5QrcodeSupportedFormats.CODE_128,
+                        Html5QrcodeSupportedFormats.CODE_39,
+                        Html5QrcodeSupportedFormats.ITF,
+                        Html5QrcodeSupportedFormats.QR_CODE
+                    ]
+                };
+
+                await html5QrScanner.start(
+                    { facingMode: 'environment' },
+                    config,
+                    async (decodedText) => {
+                        if (!isScannerRunning) return;
+                        isScannerRunning = false;
+                        await closeLiveScanner();
+                        handleDecodedBarcode(decodedText);
+                    },
+                    () => {}
+                );
+
+                isScannerRunning = true;
+                statusMsg.innerText = 'Arahkan garis merah ke barcode produk...';
+
+                // Cek apakah kamera mendukung fitur senter (torch)
+                try {
+                    const capabilities = html5QrScanner.getRunningTrackCameraCapabilities();
+                    if (capabilities && capabilities.torchFeature && capabilities.torchFeature().isSupported()) {
+                        torchBtn.classList.remove('hidden');
+                    }
+                } catch (e) {}
+
+            } catch (err) {
+                statusMsg.innerText = 'Gagal mengakses kamera. Pastikan izin kamera aktif & pakai HTTPS.';
+                showToast('Kamera tidak dapat dibuka. Periksa izin kamera browser.', true);
+            }
+        }
+
+        async function toggleScannerTorch() {
+            if (!html5QrScanner || !isScannerRunning) return;
+            try {
+                const capabilities = html5QrScanner.getRunningTrackCameraCapabilities();
+                if (capabilities && capabilities.torchFeature && capabilities.torchFeature().isSupported()) {
+                    isTorchOn = !isTorchOn;
+                    await capabilities.torchFeature().apply(isTorchOn);
+                }
+            } catch (e) {}
+        }
+
+        async function closeLiveScanner() {
+            const modal = document.getElementById('liveScannerModal');
+            modal.classList.add('hidden');
+            isScannerRunning = false;
+            isTorchOn = false;
+
+            if (html5QrScanner) {
+                try {
+                    if (html5QrScanner.isScanning) {
+                        await html5QrScanner.stop();
+                    }
+                } catch (e) {}
+            }
+        }
+
+        function handleDecodedBarcode(decodedText) {
+            const cleanCode = sanitizeBarcodeDigits(decodedText);
+            if (!cleanCode) return;
+
+            playBeepSound();
+
+            if (currentScanTarget === 'opname') {
+                document.getElementById('searchOpnameInput').value = cleanCode;
+                renderOpnameTable();
+                showToast(`Barcode terscan: ${cleanCode}`);
+            } else if (currentScanTarget === 'zone') {
+                document.getElementById('zoneSearchInput').value = cleanCode;
+                searchZoneItem();
+                showToast(`Barcode terscan: ${cleanCode}`);
+            }
+        }
+
+        function playBeepSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.value = 1000;
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.1);
+            } catch (e) {}
+        }
+
+        // =========================================================================
+        // 7. MODAL KONFIRMASI & TOAST HELPER
+        // =========================================================================
+        let pendingConfirmCallback = null;
+
+        function openConfirmModal(title, message, callback) {
+            document.getElementById('confirmTitle').innerText = title;
+            document.getElementById('confirmMessage').innerText = message;
+            pendingConfirmCallback = callback;
+            document.getElementById('confirmModal').classList.remove('hidden');
+
+            document.getElementById('confirmActionBtn').onclick = () => {
+                if (pendingConfirmCallback) pendingConfirmCallback();
+                closeConfirmModal();
+            };
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirmModal').classList.add('hidden');
+            pendingConfirmCallback = null;
+        }
+
+        let toastTimer = null;
+        function showToast(text, isError = false) {
+            const box = document.getElementById('toastBox');
+            const textEl = document.getElementById('toastText');
+            const iconEl = document.getElementById('toastIcon');
+
+            textEl.innerText = text;
+            iconEl.className = `w-2.5 h-2.5 rounded-full ${isError ? 'bg-brand-red' : 'bg-brand-yellow'}`;
+
+            box.classList.remove('translate-y-20', 'opacity-0');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                box.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function formatNumber(num) {
+            return Number(num || 0).toLocaleString('id-ID');
+        }
+
+        function formatRupiah(num) {
+            const val = Number(num || 0);
+            const prefix = val < 0 ? '-Rp ' : 'Rp ';
+            return prefix + Math.abs(Math.round(val)).toLocaleString('id-ID');
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // =========================================================================
+        // 8. INISIALISASI APLIKASI SAAT HALAMAN DIMUAT
+        // =========================================================================
+        window.addEventListener('pagehide', () => {
+            saveLocalBackup('opname_data', { items: opnameList });
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                closeLiveScanner();
+                saveLocalBackup('opname_data', { items: opnameList });
+                saveToStore('opname_data', { items: opnameList });
+            }
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+            const msg = String((event.reason && (event.reason.name || event.reason.message)) || event.reason || '');
+            if (/NotAllowedError|Permission|dismissed/i.test(msg)) {
+                event.preventDefault();
+            }
+        });
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            await initDatabase();
+            renderOpnameTable();
+        });
+    </script>
+</body>
+</html>
